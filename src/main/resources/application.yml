@@ -1,0 +1,25 @@
+jwt:
+  secret: 123456
+  issuer: puzzleapp
+  expiration-time-minutes: 60
+spring:
+  jpa:
+    hibernate:
+      ddl-auto: create
+  main:
+    allow-bean-definition-overriding: true
+  servlet:
+    multipart:
+      max-file-size: 30MB
+#  data:
+#    redis:
+#      port: 6379
+#      host: localhost
+game:
+  field-width: 3
+  field-height: 3
+  puzzle-size-default: 40
+  female-mask: masks/female2.png
+  male-mask: masks/male2.png
+  female-mask-v: masks/female2_v.png
+  male-mask-v: masks/male2_v.png
