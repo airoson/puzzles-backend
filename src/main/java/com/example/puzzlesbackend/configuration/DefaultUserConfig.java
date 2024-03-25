@@ -19,10 +19,9 @@ public class DefaultUserConfig {
 
     @Bean
     public CommandLineRunner commandLineRunner(UserService userService, PasswordEncoder encoder){
-        return (args) -> {
+        return (args) ->
             userService.createNewUser(new User(
                login, email, encoder.encode(password)
             ));
-        };
     }
 }

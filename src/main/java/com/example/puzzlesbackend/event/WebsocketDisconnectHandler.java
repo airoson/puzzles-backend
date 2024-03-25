@@ -1,6 +1,7 @@
 package com.example.puzzlesbackend.event;
 
 import com.example.puzzlesbackend.dto.messages.PuzzlesState;
+import com.example.puzzlesbackend.entities.GameSession;
 import com.example.puzzlesbackend.entities.Puzzle;
 import com.example.puzzlesbackend.services.GameService;
 import com.example.puzzlesbackend.services.MessageSender;
@@ -24,11 +25,16 @@ public class WebsocketDisconnectHandler implements ApplicationListener<SessionDi
         if(gameId != null){
             gameService.removeUser(gameId, event.getSessionId());
             List<String> users = gameService.getAllUsers(gameId);
-            PuzzlesState state = new PuzzlesState();
-            state.setUsers(users.size());
-            state.setState(PuzzlesState.State.FINE);
-            for(String user: users){
-                messageSender.sendMessage(user, "state", state);
+            GameSession gameSession = gameService.getGameSession(gameId);
+            if(gameSession.getComponents() <= 1){
+                gameService.deleteGame(gameSession);
+            }else{
+                PuzzlesState state = new PuzzlesState();
+                state.setUsers(users.size());
+                state.setState(PuzzlesState.State.FINE);
+                for(String user: users){
+                    messageSender.sendMessage(user, "state", state);
+                }
             }
         }
     }

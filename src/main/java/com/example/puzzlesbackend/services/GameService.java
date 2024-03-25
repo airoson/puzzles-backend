@@ -227,4 +227,9 @@ public class GameService {
         }
         return deleted;
     }
+
+    @Transactional
+    public void deleteGame(GameSession session){
+        repository.delete(session);
+    }
 }

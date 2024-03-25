@@ -23,15 +23,13 @@ import java.util.TreeMap;
 public class GameRestController {
     @Autowired
     private GameService gameService;
-    @Autowired
-    private ImageService imageService;
 
     @PostMapping("/create")
-    @CrossOrigin(origins = {"http://localhost:3000", "http://localhost", "http://localhost:3001"}, allowCredentials = "true")
+    @CrossOrigin(origins = {"http://localhost:3000", "0.0.0.0:3000", "192.168.43.165:3000", "http://127.0.0.1:3000", "http://localhost", "http://localhost:3001"}, allowCredentials = "true")
     public ResponseEntity<?> createGame(@RequestParam MultipartFile file, @RequestParam(name = "puzzles_count") int puzzlesCount, Principal principal){
         try{
             BufferedImage image = ImageIO.read(file.getInputStream());
-            GameParams gameParams = gameService.createGameSession(principal.getName(), image, puzzlesCount);
+            GameParams gameParams = gameService.createGameSession(principal != null ? principal.getName() : "test", image, puzzlesCount);
             return ResponseEntity.ok().body(gameParams);
         }catch(IOException e){
             log.error(e.getMessage());

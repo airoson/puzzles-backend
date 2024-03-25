@@ -32,7 +32,8 @@ public class SecurityConfig {
                 .csrf(AbstractHttpConfigurer::disable)
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests( auth ->
-                        auth.requestMatchers("/api/signin", "/api/signup", "/pzl-game/**", "api/image/**").permitAll().anyRequest().authenticated())
+                        auth.requestMatchers("/api/signin", "/api/signup", "/pzl-game/**", "api/image/**").permitAll().anyRequest()
+                                .authenticated())
                 .addFilterBefore(tokenFilter, UsernamePasswordAuthenticationFilter.class);
         return http.build();
     }
