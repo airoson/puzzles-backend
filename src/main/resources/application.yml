@@ -16,10 +16,13 @@ spring:
 #      port: 6379
 #      host: localhost
 game:
-  field-width: 3
-  field-height: 3
+  puzzle-grid-width: 5
   puzzle-size-default: 40
   female-mask: masks/female2.png
   male-mask: masks/male2.png
   female-mask-v: masks/female2_v.png
   male-mask-v: masks/male2_v.png
+  default-user-login: test
+  default-user-password: 1234
+  default-user-email: test@test.org
+  game-life-time: 3600

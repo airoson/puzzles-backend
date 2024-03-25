@@ -10,6 +10,4 @@ import lombok.NoArgsConstructor;
 public class PuzzleConnectionRequest {
     private int puzzle1Id;
     private int puzzle2Id;
-    private int x;
-    private int y;
 }

@@ -12,6 +12,8 @@ import java.util.List;
 @NoArgsConstructor
 public class Puzzle {
     private int puzzleId;
+    private int originalId;
+    private int index;
     private int x;
     private int y;
     private boolean inGame;

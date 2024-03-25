@@ -32,7 +32,6 @@ public class GameRestController {
         try{
             BufferedImage image = ImageIO.read(file.getInputStream());
             GameParams gameParams = gameService.createGameSession(principal.getName(), image, puzzlesCount);
-            imageService.addImage(file.getBytes(), file.getOriginalFilename(), gameParams.getGameId());
             return ResponseEntity.ok().body(gameParams);
         }catch(IOException e){
             log.error(e.getMessage());

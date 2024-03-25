@@ -1,6 +1,7 @@
 package com.example.puzzlesbackend.services;
 
 import com.example.puzzlesbackend.dto.GameParams;
+import com.example.puzzlesbackend.dto.FieldParams;
 import com.example.puzzlesbackend.dto.ImageCropParams;
 import com.example.puzzlesbackend.entities.GameSession;
 import com.example.puzzlesbackend.entities.Puzzle;
@@ -10,12 +11,13 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.retry.annotation.Retryable;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
-import javax.imageio.ImageIO;
 import java.awt.image.BufferedImage;
-import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.LinkedList;
 import java.util.List;
@@ -35,6 +37,8 @@ public class GameService {
 
     @Value("${game.puzzle-size-default}")
     private int puzzleDefaultSize;
+    @Value("${game.game-life-time}")
+    private long gameLifeTime;
 
     public String getGameIdBySessionId(String sessionId){
         return (String) redisTemplate.opsForHash().get("GAMES", sessionId);
@@ -45,12 +49,19 @@ public class GameService {
         ImageCropParams params = imageService.getCropPuzzleParams(puzzlesCount, image.getWidth(), image.getHeight());
         List<Puzzle> layout = puzzlesService.generateLayout(params.width(), params.height());
         List<BufferedImage> puzzles = imageService.cutImage(image, params, layout);
+        FieldParams fieldParams = puzzlesService.setPuzzlesInStartField(layout, params);
         int id = 0;
+        try{
+            BufferedImage fullImage = puzzles.remove(0);
+            imageService.addBufferedImage(fullImage, null, gameId);
+        }catch(IOException e){
+            log.info(e.getMessage());
+            return null;
+        }
         for(var puzzle: puzzles){
             try{
-                ByteArrayOutputStream out = new ByteArrayOutputStream();
-                ImageIO.write(puzzle, "png", out);
-                imageService.addImage(out.toByteArray(), null, gameId + "-" + id++);
+                imageService.addBufferedImage(puzzle, null, gameId + "-" + id);
+                id++;
             }catch(IOException e){
                 log.info(e.getMessage());
                 return null;
@@ -64,6 +75,10 @@ public class GameService {
         gameSession.setPuzzles(layout);
         gameSession.setUsers(List.of());
         gameSession.setComponents(puzzlesCount);
+        gameSession.setFieldHeight(fieldParams.fieldHeight());
+        gameSession.setGridHeight(fieldParams.gridHeight());
+        gameSession.setPuzzleSize(fieldParams.puzzleSize());
+        gameSession.setStart(Instant.now().toEpochMilli() / 1000);
         repository.save(gameSession);
         return new GameParams(gameId, params.width(), params.height());
     }
@@ -90,7 +105,7 @@ public class GameService {
     public List<String> getAllUsers(String gameId){
         GameSession gameSession = repository.findById(gameId).orElse(null);
         if(gameSession != null){
-            return new ArrayList<>(gameSession.getUsers());
+            return gameSession.getUsers() != null ? new ArrayList<>(gameSession.getUsers()): List.of();
         }
         return List.of();
     }
@@ -103,19 +118,20 @@ public class GameService {
         }
     }
 
+    @Transactional
+    @Retryable(retryFor = {IllegalArgumentException.class})
     public List<Puzzle> updatePosition(int puzzleId, int x, int y, String gameId){
         GameSession gameSession = repository.findById(gameId).orElse(null);
         if(gameSession != null){
             Puzzle puzzle = gameSession.getPuzzles().get(puzzleId);
+            if(puzzle == null) return List.of();
             int movementX = x - puzzle.getX();
             int movementY = y - puzzle.getY();
             int component = puzzle.getComponentId();
-            puzzle.setX(x);
-            puzzle.setY(y);
             if(!puzzle.isInGame()) puzzle.setInGame(true);
             List<Puzzle> result = new LinkedList<>();
             for(Puzzle p: gameSession.getPuzzles()){
-                if(p.getComponentId() == component && p.getPuzzleId() != puzzleId){
+                if(p.getComponentId() == component){
                     p.setX(p.getX() + movementX);
                     p.setY(p.getY() + movementY);
                     result.add(p);
@@ -123,11 +139,11 @@ public class GameService {
             }
             repository.save(gameSession);
             return result;
-        }
-        return List.of();
+        }else throw new IllegalArgumentException("Can't find game session");
     }
-
-    public List<Puzzle> connectPuzzles(int puzzle1Id, int puzzle2Id, int x, int y, String gameId){
+    @Transactional
+    @Retryable(retryFor = {IllegalArgumentException.class})
+    public List<Puzzle> connectPuzzles(int puzzle1Id, int puzzle2Id, String gameId){
         GameSession gameSession = repository.findById(gameId).orElse(null);
         if(gameSession != null){
             List<Puzzle> result = new LinkedList<>();
@@ -136,14 +152,22 @@ public class GameService {
             if(puzzle1 == null || puzzle2 == null) return List.of();
             int component1Id = puzzle1.getComponentId();
             int component2Id = puzzle2.getComponentId();
-            int movementX = x - puzzle2.getX();
-            int movementY = y - puzzle2.getY();
-            puzzle2.setX(x);
-            puzzle2.setY(y);
-            puzzle2.setComponentId(component1Id);
+            int pSize = gameSession.getPuzzleSize();
+            int movementX = 0, movementY = 0;
+            int[][] offsets = {{pSize, 0}, {0, pSize}, {-pSize, 0}, {0, -pSize}};
+            int i = 0;
+            for(int neighbor: puzzle1.getNeighbors()){
+                if(neighbor == puzzle2Id){
+                    movementX = puzzle1.getX() + offsets[i][0] - puzzle2.getX();
+                    movementY = puzzle1.getY() + offsets[i][1] - puzzle2.getY();
+                    break;
+                }
+                i++;
+            }
+            log.info("puzzleId1 {}, puzzleId2 {}, movementX {}, movementY {}", puzzle1Id, puzzle2Id, movementX, movementY);
             log.info("Connect puzzles {} {} : {} {}", puzzle1Id, puzzle2Id, component1Id, component2Id);
             for(Puzzle puzzle: gameSession.getPuzzles()){
-                if(puzzle.getComponentId() == component2Id && puzzle.getPuzzleId() != puzzle2Id){
+                if(puzzle.getComponentId() == component2Id){
                     puzzle.setComponentId(component1Id);
                     puzzle.setX(puzzle.getX() + movementX);
                     puzzle.setY(puzzle.getY() + movementY);
@@ -154,7 +178,7 @@ public class GameService {
             log.info("Subtract from game components: {}", gameSession.getComponents());
             repository.save(gameSession);
             return result;
-        }else return List.of();
+        }else throw new IllegalArgumentException("Can't find game session");
     }
 
     public List<Puzzle> getAllPuzzles(String gameId){
@@ -188,5 +212,19 @@ public class GameService {
 
     public GameSession getGameSession(String gameId){
         return repository.findById(gameId).orElse(null);
+    }
+
+    @Transactional
+    public int deleteOldGames(){
+        long currentTimeSeconds = Instant.now().toEpochMilli() / 1000;
+        List<GameSession> allSessions = repository.findAll();
+        int deleted = 0;
+        for(GameSession session: allSessions){
+            if(currentTimeSeconds - session.getStart() > gameLifeTime && session.getUsers().size() == 0){
+                repository.delete(session);
+                deleted++;
+            }
+        }
+        return deleted;
     }
 }

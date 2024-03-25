@@ -1,11 +1,9 @@
 package com.example.puzzlesbackend.dto.messages;
 
-
 import com.fasterxml.jackson.annotation.JsonInclude;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-
 import java.util.List;
 
 @AllArgsConstructor
@@ -15,6 +13,7 @@ public class PuzzleDescription {
     private Integer x;
     private Integer y;
     private Integer id;
+    private Integer originalId;
     @JsonInclude(JsonInclude.Include.NON_NULL)
     private Integer componentId;
     @JsonInclude(JsonInclude.Include.NON_NULL)

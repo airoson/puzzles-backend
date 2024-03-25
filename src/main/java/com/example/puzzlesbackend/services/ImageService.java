@@ -12,6 +12,7 @@ import org.springframework.stereotype.Service;
 import javax.imageio.ImageIO;
 import java.awt.*;
 import java.awt.image.BufferedImage;
+import java.io.ByteArrayOutputStream;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.util.LinkedList;
@@ -37,7 +38,7 @@ public class ImageService {
 
     public ImageCropParams getCropPuzzleParams(int puzzlesCount, int imageWidth, int imageHeight){
         int maxSize = 0, correspondingWidth = 0, correspondingHeight = 0;
-        for(int curCount = 1; curCount < (int)Math.sqrt(puzzlesCount); curCount++){
+        for(int curCount = 1; curCount <= (int)Math.sqrt(puzzlesCount); curCount++){
             if(puzzlesCount % curCount != 0)continue;
             int curWidth, curHeight, curCountX, curCountY;
             if(imageWidth > imageHeight){
@@ -89,8 +90,14 @@ public class ImageService {
             BufferedImage maleMaskV = drawARGBImage(maleMaskVNotScaled, scaledMaskHeight, scaledMaskWidth);
             BufferedImage femaleMaskV = drawARGBImage(femaleMaskVNotScaled, scaledMaskHeight, scaledMaskWidth);
             List<BufferedImage> results = new LinkedList<>();
-            int offsetX = (image.getWidth() - params.width() * params.puzzleSize()) / 2;
-            int offsetY = (image.getHeight() - params.height() * params.puzzleSize()) / 2;
+            int imageWidth = params.width() * params.puzzleSize(), imageHeight = params.height() * params.puzzleSize();
+            int offsetX = (image.getWidth() - imageWidth) / 2;
+            int offsetY = (image.getHeight() - imageHeight) / 2;
+            BufferedImage fullImage = new BufferedImage(imageWidth, imageHeight, BufferedImage.TYPE_INT_ARGB);
+            var imageGraphic = fullImage.getGraphics();
+            imageGraphic.drawImage(source.getSubimage(offsetX, offsetY, imageWidth, imageHeight), 0, 0, null);
+            imageGraphic.dispose();
+            results.add(fullImage);
             var puzzleIter = layout.iterator();
             int count = 1;
             for(int y = 0; y < params.height(); y++){
@@ -116,7 +123,6 @@ public class ImageService {
                                 addAlpha(maskPixels, imagePixels, 16);
                                 connectorImg.setRGB(0, 0, scaledMaskHeight, scaledMaskWidth, imagePixels, 0, scaledMaskHeight);
                                 graphic.drawImage(connectorImg, scaledMaskWidth, 0, null);
-                                log.info("Puzzle {}, side {}, pos {} {}", count, i, scaledMaskWidth, 0);
                             }else if(i == 1){
                                 var tempImg = image.getSubimage(offsetX + (x + 1) * params.puzzleSize(), offsetY + y * params.puzzleSize(), scaledMaskWidth, scaledMaskHeight );
                                 connectorImg = new BufferedImage(tempImg.getWidth(), tempImg.getHeight(), BufferedImage.TYPE_INT_ARGB);
@@ -189,6 +195,16 @@ public class ImageService {
         image.setOriginalName(originalName);
         image.setId(id);
         imageRepository.save(image);
+    }
+
+    public void addBufferedImage(BufferedImage image, String originalName, String id) throws IOException{
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        ImageIO.write(image, "png", out);
+        PuzzleImage puzzleImage = new PuzzleImage();
+        puzzleImage.setData(out.toByteArray());
+        puzzleImage.setOriginalName(originalName);
+        puzzleImage.setId(id);
+        imageRepository.save(puzzleImage);
     }
 
     public byte[] findImageById(String imageId){
